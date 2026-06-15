@@ -65,14 +65,14 @@ class TestSupervisorOutput:
     """LLM 结构化输出实体."""
 
     def test_default_values(self) -> None:
-        from app.entities.agent import SupervisorOutput
+        from app.entities.agent_outputs import SupervisorOutput
         output = SupervisorOutput()
         assert output.new_title == ""
         assert output.title_note == ""
         assert output.attr_mapping == []
 
     def test_full_output(self) -> None:
-        from app.entities.agent import SupervisorOutput
+        from app.entities.agent_outputs import SupervisorOutput
         from app.entities.chat import AttrMapping
         output = SupervisorOutput(
             new_title="夏季纯棉T恤",

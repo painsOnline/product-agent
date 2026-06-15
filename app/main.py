@@ -5,6 +5,10 @@
 逻辑说明：FastAPI 应用入口，注册路由、启动服务.
 """
 import logging
+import os
+import re
+from datetime import datetime
+from logging.handlers import RotatingFileHandler
 
 import uvicorn
 from fastapi import FastAPI, Request
@@ -16,10 +20,42 @@ from app.api.upload_api import router as upload_router
 from app.conf.settings import get_settings
 from app.services.auth_service import AuthError
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+
+def _setup_logging() -> None:
+    """配置日志：控制台 + 文件滚动（50MB，logs/YYYYMMDD-N.log）."""
+    log_dir = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)), "logs"
+    )
+    os.makedirs(log_dir, exist_ok=True)
+
+    today = datetime.now().strftime("%Y%m%d")
+    log_file = os.path.join(log_dir, f"{today}.log")
+
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=50 * 1024 * 1024,
+        backupCount=10,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    ))
+    file_handler.namer = lambda name: re.sub(
+        r"(.+)\.log\.(\d+)$", r"\1-\2.log", name
+    )
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    ))
+
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    root.addHandler(file_handler)
+    root.addHandler(console_handler)
+
+
+_setup_logging()
 logger = logging.getLogger(__name__)
 
 app = FastAPI(

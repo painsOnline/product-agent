@@ -96,7 +96,7 @@ class AgentMonitor:
     # ==================== 结果 ====================
 
     async def send_final(self, data: dict) -> None:
-        """推送 Agent 最终结构化输出.
+        """推送 Agent 最终结构化输出（执行结果，需确认）.
 
         Args:
             data: 经过 Pydantic 校验的 SupervisorOutput 字典
@@ -104,6 +104,18 @@ class AgentMonitor:
         await self._send({
             "type": WSMessageType.FINAL,
             "data": data,
+        })
+
+    async def send_respond(self, reply: str, is_rejected: bool = False) -> None:
+        """推送聊天问询回答（无需确认）.
+
+        Args:
+            reply: 回复内容
+            is_rejected: 是否拒绝回答
+        """
+        await self._send({
+            "type": WSMessageType.RESPOND,
+            "data": {"reply": reply, "is_rejected": is_rejected},
         })
 
     async def send_confirm(

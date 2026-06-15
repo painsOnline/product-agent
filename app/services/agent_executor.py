@@ -1,20 +1,24 @@
 """
 文件名称：agent_executor.py
 作者：shop-tool
-时间：2026-06-14
-逻辑说明：Agent 执行器，thread_id/user_id 从 RequestContext 获取.
+时间：2026-06-15
+逻辑说明：Agent 执行器，流式推送，从 AgentState 提取结构化结果.
 """
 import asyncio
+import json as _json
+import logging
 from typing import Any
 
-from app.conf.constants import StatusCode
+from langchain_core.messages import AIMessage, ToolMessage
+
 from app.core.context import RequestContext
 from app.core.monitor import AgentMonitor
-from app.entities.agent import SupervisorOutput
+
+logger = logging.getLogger(__name__)
 
 
 class AgentExecutor:
-    """封装 Agent 执行、流式推送和输出校验."""
+    """封装 Agent 执行、流式推送和结果提取."""
 
     def __init__(self, ctx: RequestContext, monitor: AgentMonitor) -> None:
         self._ctx = ctx
@@ -22,97 +26,124 @@ class AgentExecutor:
 
     async def execute(
         self,
-        agent,
-        messages: list[dict],
+        graph,
+        input_state: dict,
         config: dict,
         origin_title: str,
     ) -> dict:
         await self._monitor.send_step(
             "agent", "running", "正在分析您的需求，调用子 Agent..."
         )
-        final_output = None
+
         seen_nodes: set[str] = set()
+        _final_state_snapshot: Any = None
 
-        async for chunk in agent.astream(
-            {"messages": messages}, config=config, stream_mode="updates"
-        ):
-            for node_name, state_update in chunk.items():
-                self._on_node_start(node_name, seen_nodes)
-                self._push_stream(state_update)
-                final_output = self._collect_final(node_name, state_update, final_output)
+        try:
+            async for chunk in graph.astream(
+                input_state, config, stream_mode="updates"
+            ):
+                if chunk is None:
+                    continue
+                for node_name, node_output in chunk.items():
+                    if node_output is None:
+                        continue
+                    if node_name not in seen_nodes:
+                        seen_nodes.add(node_name)
+                        if node_name == "title_optimizer":
+                            asyncio.create_task(
+                                self._monitor.send_step(
+                                    "title_optimizer", "running", "正在优化商品标题..."
+                                )
+                            )
+                        elif node_name == "attribute_matcher":
+                            asyncio.create_task(
+                                self._monitor.send_step(
+                                    "attribute_matcher", "running", "正在匹配商品属性..."
+                                )
+                            )
 
-        self._mark_nodes_done(seen_nodes)
-        return self._validate_output(final_output, origin_title)
+                    msgs = node_output.get("messages", [])
+                    for msg in msgs:
+                        if isinstance(msg, (AIMessage, ToolMessage)):
+                            content = getattr(msg, "content", "")
+                            if content and isinstance(content, str):
+                                asyncio.create_task(
+                                    self._monitor.send_stream(content[:500])
+                                )
 
-    def _on_node_start(self, node_name: str, seen: set[str]) -> None:
-        node_steps = {
-            "title-optimizer": ("title_optimizer", "running", "正在优化商品标题..."),
-            "attribute-matcher": ("attribute_matcher", "running", "正在匹配商品属性..."),
-        }
-        if node_name in seen:
-            return
-        seen.add(node_name)
-        if node_name in node_steps:
-            step, status, detail = node_steps[node_name]
-            asyncio.create_task(self._monitor.send_step(step, status, detail))
-        elif node_name in ("supervisor", "__end__"):
-            asyncio.create_task(
-                self._monitor.send_step("summarizing", "running", "正在汇总结果...")
+                _final_state_snapshot = chunk
+        except Exception:
+            logger.exception("Graph execution failed, falling back to state extraction")
+            await self._monitor.send_step(
+                "agent", "failed", "Agent 执行异常，尝试从已有状态提取结果"
             )
 
-    def _push_stream(self, state_update: dict) -> None:
-        if "messages" not in state_update:
-            return
-        msgs = state_update["messages"]
-        if not msgs:
-            return
-        last_msg = msgs[-1] if isinstance(msgs, list) else msgs
-        content = getattr(last_msg, "content", "")
-        if content and not isinstance(content, list):
-            asyncio.create_task(self._monitor.send_stream(str(content)))
+        # 从 AgentState 提取结果
+        try:
+            state = await graph.aget_state(config)
+            values = getattr(state, "values", state) or {}
+            result = _extract(state, origin_title)
+            result["_current_step"] = values.get("current_step", "confirm")
+        except Exception:
+            logger.exception("State extraction failed, using fallback")
+            result = _fallback(origin_title, "状态提取失败")
+            result["_current_step"] = "confirm"
 
-    def _mark_nodes_done(self, seen: set[str]) -> None:
-        for node in ("title-optimizer", "attribute-matcher"):
-            if node in seen:
-                asyncio.create_task(
-                    self._monitor.send_step(node.replace("-", "_"), "done", "执行完成")
-                )
-
-    @staticmethod
-    def _collect_final(node_name: str, state_update: dict, current: Any) -> Any:
-        if node_name not in ("supervisor", "__end__"):
-            return current
-        if "structured_response" in state_update:
-            return state_update["structured_response"]
-        if "messages" in state_update:
-            msgs = state_update["messages"]
-            if msgs:
-                last = msgs[-1] if isinstance(msgs, list) else msgs
-                return getattr(last, "content", None)
-        return current
-
-    def _validate_output(self, final_output: Any, origin_title: str) -> dict:
-        if isinstance(final_output, dict):
-            return final_output
-        if isinstance(final_output, str):
-            try:
-                return SupervisorOutput.model_validate_json(final_output).model_dump()
-            except Exception:
-                asyncio.create_task(
-                    self._monitor.send_error(StatusCode.PARSE_ERROR, "LLM 返回格式异常")
-                )
+        if result.get("new_title") and result["new_title"] != origin_title:
+            await self._monitor.send_step("summarizing", "done", "结果汇总完成")
         else:
-            asyncio.create_task(self._monitor.send_step("summarizing", "failed", "无输出"))
-        return {
-            "new_title": origin_title,
-            "title_note": "LLM 返回格式异常" if isinstance(final_output, str) else "无输出",
-            "import_product_id": self._ctx.import_product_id,
-            "thread_id": self._ctx.thread_id,
-            "user_id": self._ctx.user_id,
-            "attr_mapping": [],
-            "warning": {
-                "has_warn": isinstance(final_output, str),
-                "warn_content": "输出校验失败" if isinstance(final_output, str) else "",
-            },
-            "suggestion": {"summary": "", "items": []},
-        }
+            logger.warning("Extracted result has no new_title or matches original: %s", result.get("title_note", ""))
+
+        return result
+
+
+def _extract(state: Any, origin_title: str) -> dict:
+    """从 StateSnapshot 提取结果.
+
+    优先级: latest_result → messages 中的 JSON.
+    """
+    if state is None:
+        return _fallback(origin_title, "状态为空")
+
+    values = getattr(state, "values", state) or {}
+
+    # 方式1: latest_result（state_schema 直接写入）
+    lr = values.get("latest_result")
+    if lr and isinstance(lr, dict) and lr.get("new_title"):
+        logger.info("Result extracted from latest_result: new_title=%s", lr["new_title"][:50])
+        return lr
+
+    # 方式2: messages 中最后一个含 new_title 的 JSON
+    msgs = values.get("messages", [])
+    for msg in reversed(msgs):
+        content = getattr(msg, "content", "")
+        if not isinstance(content, str) or "new_title" not in content:
+            continue
+        try:
+            cleaned = content.strip()
+            if cleaned.startswith("```"):
+                idx = cleaned.find("\n")
+                cleaned = cleaned[idx + 1:] if idx > 0 else cleaned[3:]
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3]
+            parsed = _json.loads(cleaned.strip())
+            if isinstance(parsed, dict) and "new_title" in parsed:
+                logger.info("Result extracted from messages JSON: new_title=%s", parsed["new_title"][:50])
+                return parsed
+        except Exception:
+            pass
+
+    logger.warning("No valid result found in state, messages count=%d, latest_result=%s",
+                   len(msgs), "present" if lr else "absent")
+    return _fallback(origin_title, "Agent 未返回结构化结果")
+
+
+def _fallback(origin_title: str, reason: str) -> dict:
+    return {
+        "new_title": origin_title,
+        "original_title": origin_title,
+        "title_note": reason,
+        "attr_mapping": [],
+        "warning": {"has_warn": True, "warn_content": reason},
+        "suggestion": {"summary": "", "items": []},
+    }

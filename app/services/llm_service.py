@@ -17,18 +17,15 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from app.agent.llm import create_llm
+from app.core.llm import create_llm
 from app.conf.constants import ActionStatus, ActionType
-from app.conf.settings import get_settings
-from app.entities.agent import (
+from app.entities.agent_outputs import (
     AttributeMatcherOutput,
     SupervisorOutput,
     TitleOptimizerOutput,
 )
 
 logger = logging.getLogger(__name__)
-
-settings = get_settings()
 
 
 def _strip_json_wrapper(raw: str) -> str:

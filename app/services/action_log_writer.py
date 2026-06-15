@@ -5,9 +5,9 @@
 逻辑说明：Agent 行为日志异步写入器，user_id/import_product_id/db 从 ctx 获取.
 """
 import logging
-import uuid
 
 from app.core.context import RequestContext
+from app.utils.id_utils import str_to_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +27,8 @@ async def write_action_log(
         if db is None:
             return
         log_entry = AgentActionLog(
-            user_id=uuid.UUID(ctx.user_id),
-            import_product_id=uuid.UUID(ctx.import_product_id),
+            user_id=str_to_uuid(ctx.user_id),
+            import_product_id=str_to_uuid(ctx.import_product_id),
             action_type=action_type,
             status=status,
             request=request_data,

@@ -1,30 +1,30 @@
 """
-文件名称：attribute_matcher.py
+文件名称：intent_detector.py
 作者：shop-tool
 时间：2026-06-15
-逻辑说明：Attribute Matcher 子 Agent，create_agent + middleware + state_schema.
+逻辑说明：意图识别子 Agent，判断用户意图（title/attribute/both/chat）.
 """
 from typing import Any
 
 from langchain.agents import create_agent
 
-from app.prompts import get_attribute_matcher_prompt
+from app.prompts import get_prompt
 from app.agent.sub_agents.base import BaseSubAgent
 from app.entities.agent_state import AgentState
 
 
-class AttributeMatcher(BaseSubAgent):
-    """属性匹配子 Agent."""
+class IntentDetector(BaseSubAgent):
+    """意图识别子 Agent."""
 
     def create_agent(self, llm: Any, middleware: tuple = ()) -> Any:
         return create_agent(
             model=llm,
             tools=[],
-            system_prompt=get_attribute_matcher_prompt(),
+            system_prompt=get_prompt("intent_prompt", ""),
             middleware=middleware,
             state_schema=AgentState,
-            name="attribute_matcher",
+            name="intent_detector",
         )
 
 
-attribute_matcher = AttributeMatcher()
+intent_detector = IntentDetector()

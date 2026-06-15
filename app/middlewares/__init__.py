@@ -1,31 +1,31 @@
 """
 文件名称：__init__.py
 作者：shop-tool
-时间：2026-06-14
-逻辑说明：Middleware 自动发现，扫描本目录下继承 BaseMiddleware 的类并实例化.
+时间：2026-06-15
+逻辑说明：Middleware 自动发现，供子 Agent 使用.
 
-新增 Middleware 只需两步（OCP）：
-1. 在本目录新建 xxx.py，继承 BaseMiddleware
-2. 无需其他改动，自动被 discover_middlewares() 发现
+discover_middlewares() → create_agent(middleware=...)
 """
 import importlib
 import logging
 import pkgutil
-from collections.abc import Iterable
+from typing import Any
 
 from app.middlewares.base import BaseMiddleware
 
 logger = logging.getLogger(__name__)
 
+_instances: list[BaseMiddleware] | None = None
 
-def discover_middlewares() -> list[BaseMiddleware]:
-    """自动发现并实例化所有 Middleware.
 
-    扫描 app/middlewares/ 目录，跳过 __init__.py 和 base.py。
-    """
-    instances: list[BaseMiddleware] = []
+def _get_instances() -> list[BaseMiddleware]:
+    """懒加载并缓存中间件实例."""
+    global _instances
+    if _instances is not None:
+        return _instances
+
+    _instances = []
     package_dir = __path__  # type: ignore[name-defined]
-
     for _, name, _ in pkgutil.iter_modules(package_dir):
         if name in ("base",):
             continue
@@ -40,9 +40,13 @@ def discover_middlewares() -> list[BaseMiddleware]:
                 ):
                     instance = obj()
                     if instance.enabled:
-                        instances.append(instance)
+                        _instances.append(instance)
                         logger.info("Middleware loaded: %s", name)
         except Exception:
             logger.exception("Failed to load middleware: %s", name)
+    return _instances
 
-    return instances
+
+def discover_middlewares() -> tuple[Any, ...]:
+    """返回用于 create_agent(middleware=...) 的中间件元组."""
+    return tuple(_get_instances())

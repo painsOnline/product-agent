@@ -72,6 +72,7 @@ class WSMessageType:
     STREAM = "stream"
     STEP = "step"
     FINAL = "final"
+    RESPOND = "respond"
     CONFIRM = "confirm"
     ERROR = "error"
     HEARTBEAT = "heartbeat"

@@ -37,6 +37,7 @@ class ChatSessionOrchestrator:
         self._conn_id = conn_id
         self._monitor = AgentMonitor(websocket)
         self._heartbeat_task: asyncio.Task | None = None
+        self._closed: bool = False
         ctx.activate()
         self._session = ChatSession(ctx, self._monitor)
 
@@ -44,7 +45,7 @@ class ChatSessionOrchestrator:
         try:
             await self.ctx.init_tenant_db()
             await self._message_loop()
-        except WebSocketDisconnect:
+        except (WebSocketDisconnect, RuntimeError):
             logger.info("WS disconnected: %s", self._conn_id)
         except Exception as e:
             logger.exception("WS error: %s", self._conn_id)
@@ -78,7 +79,7 @@ class ChatSessionOrchestrator:
         await self.ctx.close()
 
     async def _message_loop(self) -> None:
-        while True:
+        while not self._closed:
             raw = await self._ws.receive_text()
             msg = self._parse(raw)
             if msg is None:
@@ -112,12 +113,18 @@ class ChatSessionOrchestrator:
             logger.warning("Unknown WS message type: %s", msg_type)
 
     async def _handle_chat(self, msg: dict) -> None:
-        self.ctx.thread_id = msg.get("thread_id", "")
-        self.ctx.import_product_id = msg.get("import_product_id", "")
+        thread_id = msg.get("thread_id")
+        import_product_id = msg.get("import_product_id")
+        if not thread_id or not import_product_id:
+            await self._monitor.send_error(StatusCode.BAD_REQUEST, "缺少必填参数 thread_id / import_product_id")
+            return
+        self.ctx.thread_id = thread_id
+        self.ctx.import_product_id = import_product_id
 
         if not await register_connection(self.ctx, self._conn_id):
             await self._monitor.send_error(StatusCode.SESSION_CONFLICT, "该商品已有其他连接")
             await self._ws.close(code=4009)
+            self._closed = True
             return
 
         if self._heartbeat_task is None:
@@ -130,12 +137,15 @@ class ChatSessionOrchestrator:
         try:
             await self._session.handle_chat(
                 operate_type=msg.get("operate_type", "both"),
-                origin_title=msg.get("origin_title", ""),
-                origin_attrs=msg.get("origin_attrs", []),
+                target_attrs=msg.get("target_attrs", []),
                 user_content=msg.get("user_content", ""),
+                manual_data=msg.get("manual_data"),
             )
         finally:
             await release_lock(self.ctx)
 
     async def _handle_confirm_reply(self, msg: dict) -> None:
-        await self._session.handle_confirm(msg.get("operate_result", "cancel"))
+        await self._session.handle_confirm(
+            msg.get("operate_result", "cancel"),
+            payload=msg.get("payload"),
+        )

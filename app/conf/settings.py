@@ -34,16 +34,6 @@ class Settings(BaseSettings):
     # Upload
     upload_path: str = "./uploads"
 
-    # LLM defaults
-    llm_provider: str = "deepseek"
-    llm_model_name: str = "deepseek-chat"
-    llm_base_url: str = "https://api.deepseek.com/v1"
-    llm_api_key: str = ""
-    llm_temperature: float = 0.3
-    llm_max_tokens: int = 4096
-    llm_timeout_seconds: int = 60
-    llm_max_retries: int = 3
-
     # Agent
     agent_lock_timeout: int = 60
     agent_lock_wait_timeout: int = 60

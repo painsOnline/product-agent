@@ -62,9 +62,11 @@ async def authenticate(
         )
 
     token_tenant = payload.get("tenantCode", "")
-    user_id = payload.get("sub", "")
+    user_id = payload.get("sub")
     is_admin = payload.get("isAdmin", False)
 
+    if not user_id:
+        raise AuthError(StatusCode.UNAUTHORIZED, "Token 无效：缺少用户标识")
     if not tenant_code:
         raise AuthError(StatusCode.BAD_REQUEST, "缺少 Tenant 头")
 

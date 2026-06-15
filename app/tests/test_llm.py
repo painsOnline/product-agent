@@ -6,7 +6,7 @@
 """
 import pytest
 
-from app.agent.llm import _detect_provider, _build_kwargs, create_llm
+from app.core.llm import create_llm
 
 
 class TestProviderDetection:

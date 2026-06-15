@@ -6,6 +6,8 @@
 """
 from pydantic import BaseModel, Field
 
+from app.entities.chat import TargetAttr
+
 
 class ProductSaveRequest(BaseModel):
     """商品保存请求."""
@@ -17,8 +19,8 @@ class ProductSaveRequest(BaseModel):
     detail_pictures: list[str] = Field(
         default_factory=list, description="详情图 URL 数组"
     )
-    attrs: dict[str, str] = Field(
-        default_factory=dict, description="商品属性键值对"
+    attrs: dict[str, list[str]] = Field(
+        default_factory=dict, description="商品属性键值对，值统一为数组以适配多选"
     )
 
 
@@ -64,6 +66,15 @@ class ProductGetRequest(BaseModel):
     ext_product_id: str = Field(..., description="第三方商品唯一 ID")
 
 
+class AutoMatchRequest(BaseModel):
+    """Agent 自动匹配请求."""
+    ext_from: str = Field(..., description="来源平台：1688 / taobao")
+    ext_product_id: str = Field(..., description="第三方商品唯一 ID")
+    target_attrs: list[TargetAttr] = Field(
+        default_factory=list, description="目标平台属性结构"
+    )
+
+
 class ProductData(BaseModel):
     """商品详情数据."""
     id: str = Field(..., description="本地库主键 UUID")
@@ -75,6 +86,6 @@ class ProductData(BaseModel):
     detail_pictures: list[str] = Field(
         default_factory=list, description="详情图路径"
     )
-    attrs: dict[str, str] = Field(
-        default_factory=dict, description="原始商品属性"
+    attrs: dict[str, list[str]] = Field(
+        default_factory=dict, description="原始商品属性，值统一为数组"
     )

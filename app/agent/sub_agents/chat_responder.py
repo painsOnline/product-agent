@@ -1,30 +1,30 @@
 """
-文件名称：attribute_matcher.py
+文件名称：chat_responder.py
 作者：shop-tool
-时间：2026-06-15
-逻辑说明：Attribute Matcher 子 Agent，create_agent + middleware + state_schema.
+时间：2026-06-16
+逻辑说明：聊天响应子 Agent，仅回答商品相关提问，超出范围则拒绝.
 """
 from typing import Any
 
 from langchain.agents import create_agent
 
-from app.prompts import get_attribute_matcher_prompt
+from app.prompts import get_prompt
 from app.agent.sub_agents.base import BaseSubAgent
 from app.entities.agent_state import AgentState
 
 
-class AttributeMatcher(BaseSubAgent):
-    """属性匹配子 Agent."""
+class ChatResponder(BaseSubAgent):
+    """聊天响应子 Agent."""
 
     def create_agent(self, llm: Any, middleware: tuple = ()) -> Any:
         return create_agent(
             model=llm,
             tools=[],
-            system_prompt=get_attribute_matcher_prompt(),
+            system_prompt=get_prompt("chat_responder_prompt", ""),
             middleware=middleware,
             state_schema=AgentState,
-            name="attribute_matcher",
+            name="chat_responder",
         )
 
 
-attribute_matcher = AttributeMatcher()
+chat_responder = ChatResponder()

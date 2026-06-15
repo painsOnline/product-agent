@@ -7,6 +7,7 @@
 接口：
 - POST /agent/product/save — 保存第三方商品数据
 - GET /agent/product/get — 查询商品数据
+- POST /agent/product/auto-match — Agent 自动匹配标题和属性
 """
 import logging
 
@@ -14,9 +15,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
-from app.entities.product import ProductSaveRequest
+from app.entities.product import AutoMatchRequest, ProductSaveRequest
 from app.conf.constants import StatusCode
-from app.services import product_service
+from app.core.context import RequestContext
+from app.services import auto_match_service, product_service
 from app.services.auth_service import AuthError
 from app.utils.response_utils import error, success
 
@@ -85,3 +87,42 @@ async def get_product(
     except Exception as e:
         logger.exception("Failed to get product")
         return error(code="500", msg=str(e))
+
+
+@router.post(
+    "/product/auto-match",
+    summary="Agent 自动匹配标题和属性",
+    description="根据已保存的商品数据，由 Agent 自动优化标题并匹配属性，无需对话",
+)
+async def auto_match_product(
+    req: AutoMatchRequest,
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Agent 自动匹配."""
+    try:
+        ctx = RequestContext(
+            tenant_code=user["tenant_code"],
+            user_id=user["user_id"],
+            import_product_id=req.ext_product_id,
+        )
+        ctx.thread_id = f"{user['user_id']}_{req.ext_product_id}"
+        ctx.activate()
+        await ctx.init_tenant_db()
+
+        target_attrs = [
+            t.model_dump() for t in req.target_attrs
+        ] if req.target_attrs else None
+        result = await auto_match_service.auto_match(
+            ctx, req.ext_from, req.ext_product_id, target_attrs=target_attrs
+        )
+
+        await db.commit()
+        await ctx.close()
+        return success(result)
+    except ValueError as e:
+        return error(code=StatusCode.NOT_FOUND, msg=str(e))
+    except Exception as e:
+        logger.exception("Auto-match failed")
+        await db.rollback()
+        return error(code=StatusCode.SERVER_ERROR, msg=str(e))

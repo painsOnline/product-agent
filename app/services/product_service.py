@@ -34,11 +34,16 @@ async def save_product(
     main_picture_url: str,
     pictures_urls: list[str],
     detail_pictures_urls: list[str],
-    attrs: dict[str, str],
+    attrs: dict[str, list[str]],
     *,
     repo: ProductRepository = product_repo,
 ):
     """保存商品数据，包含图片下载."""
+    # 归一化 attrs 值统一为数组格式
+    normalized_attrs = {
+        k: ([v] if isinstance(v, str) else list(v)) for k, v in attrs.items()
+    }
+
     existing = await repo.get_by_ext_product_id(
         db, ext_from, ext_product_id
     )
@@ -71,7 +76,7 @@ async def save_product(
             main_picture=main_path,
             pictures=slide_paths,
             detail_pictures=detail_paths,
-            attrs=attrs,
+            attrs=normalized_attrs,
             modify_time=datetime.now(),
         )
     else:
@@ -83,7 +88,7 @@ async def save_product(
             main_picture=main_path,
             pictures=slide_paths,
             detail_pictures=detail_paths,
-            attrs=attrs,
+            attrs=normalized_attrs,
         )
 
     return build_save_response(
@@ -103,6 +108,10 @@ async def get_product(
     if not product:
         return None
 
+    raw_attrs = product.attrs or {}
+    normalized_attrs = {
+        k: ([v] if isinstance(v, str) else list(v)) for k, v in raw_attrs.items()
+    }
     return ProductData(
         id=str(product.id),
         ext_from=product.ext_from,
@@ -111,5 +120,5 @@ async def get_product(
         main_picture=product.main_picture,
         pictures=product.pictures or [],
         detail_pictures=product.detail_pictures or [],
-        attrs=product.attrs or {},
+        attrs=normalized_attrs,
     )

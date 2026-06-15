@@ -6,7 +6,7 @@
 """
 import pytest
 
-from app.agent.prompts import (
+from app.prompts import (
     PromptLoader,
     get_supervisor_prompt,
     get_title_optimizer_prompt,
