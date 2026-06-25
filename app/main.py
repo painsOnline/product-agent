@@ -18,6 +18,11 @@ from fastapi.responses import JSONResponse
 from app.api.router import api_router
 from app.api.upload_api import router as upload_router
 from app.conf.settings import get_settings
+from app.core.langfuse_client import init_langfuse, shutdown_langfuse
+# 启动时显式初始化 LangFuse
+print("[main DEBUG] Calling init_langfuse()...")
+init_langfuse()
+print("[main DEBUG] init_langfuse() returned")
 from app.services.auth_service import AuthError
 
 
@@ -57,6 +62,7 @@ def _setup_logging() -> None:
 
 _setup_logging()
 logger = logging.getLogger(__name__)
+
 
 app = FastAPI(
     title="Product Agent API",
@@ -99,7 +105,7 @@ def main() -> None:
         "app.main:app",
         host=settings.server_host,
         port=settings.server_port,
-        reload=True,
+        reload=settings.is_development,
     )
 
 

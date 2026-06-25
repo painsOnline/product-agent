@@ -34,6 +34,16 @@ class PlainRedisSaver(BaseCheckpointSaver):
     async def _ensure_redis(self) -> Redis:
         if self._redis is None:
             self._redis = Redis.from_url(self._redis_url, decode_responses=True)
+            return self._redis
+        # 检测连接是否存活，不存活则重建
+        try:
+            await self._redis.ping()
+        except Exception:
+            try:
+                await self._redis.aclose()
+            except Exception:
+                pass
+            self._redis = Redis.from_url(self._redis_url, decode_responses=True)
         return self._redis
 
     # config["configurable"]["thread_id"] 格式:

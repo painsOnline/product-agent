@@ -6,6 +6,7 @@
 """
 import contextvars
 import logging
+from typing import Any
 
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,9 +40,23 @@ class RequestContext:
         self.import_product_id = import_product_id
         self.thread_id: str = ""
 
+        # LangFuse trace context（生命周期 = WS 连接）
+        self.langfuse_trace_id: str = ""
+        self._langfuse_trace_ctx: Any = None
+        self._langfuse_attr_ctx: Any = None
+        self._langfuse_hitl_span: Any = None
+
         self._redis: Redis | None = None
         self._config_db: AsyncSession | None = None
         self._tenant_db: AsyncSession | None = None
+
+    @property
+    def langfuse_hitl_span(self) -> Any:
+        return self._langfuse_hitl_span
+
+    @langfuse_hitl_span.setter
+    def langfuse_hitl_span(self, span: Any) -> None:
+        self._langfuse_hitl_span = span
 
     def activate(self) -> None:
         _current.set(self)

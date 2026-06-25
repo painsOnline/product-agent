@@ -8,7 +8,6 @@ import pytest
 
 from app.prompts import (
     PromptLoader,
-    get_supervisor_prompt,
     get_title_optimizer_prompt,
     get_attribute_matcher_prompt,
 )
@@ -19,8 +18,8 @@ class TestPromptLoader:
 
     def test_get_known_prompts(self) -> None:
         loader = PromptLoader()
-        supervisor = loader.get("supervisor_prompt")
-        assert len(supervisor) > 0
+        prompt = loader.get("title_optimizer_prompt")
+        assert len(prompt) > 0
 
     def test_get_missing_prompt_returns_default(self) -> None:
         loader = PromptLoader()
@@ -29,17 +28,13 @@ class TestPromptLoader:
 
     def test_reload(self) -> None:
         loader = PromptLoader()
-        loader.get("supervisor_prompt")  # populate cache
+        loader.get("title_optimizer_prompt")  # populate cache
         loader.reload()
         # cache cleared, next get will re-read
 
 
 class TestPromptFunctions:
     """模块级提示词函数."""
-
-    def test_get_supervisor_prompt(self) -> None:
-        prompt = get_supervisor_prompt()
-        assert len(prompt) > 0
 
     def test_get_title_optimizer_prompt(self) -> None:
         prompt = get_title_optimizer_prompt()

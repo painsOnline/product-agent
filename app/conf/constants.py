@@ -59,10 +59,30 @@ class ChatRole:
 
 
 class OperateType:
-    """操作类型."""
+    """操作类型 — WS 对外值."""
     REWRITE_TITLE = "rewrite_title"
     MATCH_ATTR = "match_attr"
     BOTH = "both"
+
+    # 内部意图值（intent_detector 返回的 action）
+    TITLE = "title"
+    ATTRIBUTE = "attribute"
+    CHAT = "chat"
+
+    # intent_detector action → WS-facing operate_type
+    INTENT_TO_OPERATE: dict[str, str] = {
+        "title": REWRITE_TITLE,
+        "attribute": MATCH_ATTR,
+        "both": BOTH,
+        "chat": "chat",
+    }
+
+    # operate_type 对应的路由 key
+    ROUTE_MAP: dict[str, str] = {
+        REWRITE_TITLE: "title",
+        MATCH_ATTR: "attribute",
+        BOTH: "both",
+    }
 
 
 class WSMessageType:

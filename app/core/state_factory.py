@@ -8,6 +8,8 @@ from typing import Any
 
 from langchain_core.messages import HumanMessage
 
+from app.conf.constants import OperateType as _O
+
 
 class StateFactory:
     """AgentState 初始状态工厂.
@@ -23,7 +25,7 @@ class StateFactory:
         thread_id: str = "",
         user_id: str = "",
         import_product_id: str = "",
-        operate_type: str = "both",
+        operate_type: str = _O.BOTH,
         original_title: str = "",
         original_attrs: list[dict[str, Any]] | None = None,
         target_attrs: list[dict[str, Any]] | None = None,
@@ -88,7 +90,7 @@ class StateFactory:
         user_content = "请优化商品标题并匹配属性"
         state = self._base(
             thread_id=thread_id, user_id=user_id,
-            import_product_id=import_product_id, operate_type="both",
+            import_product_id=import_product_id, operate_type=_O.BOTH,
             original_title=original_title, original_attrs=original_attrs,
             target_attrs=target_attrs or [], user_content=user_content,
         )
